@@ -1,0 +1,242 @@
+name: Update TV Source File
+
+on:
+  schedule:
+    - cron: '0 22 * * *'  # UTC 22:00 = 北京时间 06:00
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-file:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Git
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        
+    - name: Prepare directory
+      run: |
+        mkdir -p tv
+        echo "创建 tv 目录..."
+        
+    - name: Download TV source file
+      id: download
+      run: |
+        echo "开始下载直播源文件..."
+        
+        REMOTE_URL="https://my9.ltd/tv/pllive.txt"
+        LOCAL_PATH="tv/pllive.txt"
+        TEMP_FILE="pllive_temp.txt"
+        
+        echo "目标URL: $REMOTE_URL"
+        
+        # 方法1: 简单curl下载
+        echo "=== 方法1: 简单curl下载 ==="
+        curl -s -L \
+          -o "$TEMP_FILE" \
+          -H "User-Agent: curl/8.8.0" \
+          -H "Accept: */*" \
+          --max-time 60 \
+          "$REMOTE_URL"
+          
+        DOWNLOAD_RESULT=$?
+        
+        if [ $DOWNLOAD_RESULT -eq 0 ] && [ -f "$TEMP_FILE" ] && [ -s "$TEMP_FILE" ]; then
+          FILE_SIZE=$(wc -c < "$TEMP_FILE")
+          echo "✅ 方法1下载成功"
+          echo "文件大小: $FILE_SIZE 字节"
+          
+          # 检查文件内容
+          if head -1 "$TEMP_FILE" | grep -q "MoMo更新\|#genre#\|#EXTM3U\|上海电信"; then
+            echo "✅ 文件内容验证通过"
+            mv "$TEMP_FILE" "$LOCAL_PATH"
+            echo "downloaded=true" >> $GITHUB_OUTPUT
+            echo "method=simple_curl" >> $GITHUB_OUTPUT
+          else
+            echo "❌ 文件内容无效"
+            rm -f "$TEMP_FILE"
+          fi
+        else
+          echo "❌ 方法1失败，错误代码: $DOWNLOAD_RESULT"
+          rm -f "$TEMP_FILE"
+        fi
+        
+        # 方法2: wget
+        if [ ! -f "$LOCAL_PATH" ] || [ ! -s "$LOCAL_PATH" ]; then
+          echo ""
+          echo "=== 方法2: 使用wget下载 ==="
+          wget \
+            --timeout=45 \
+            --tries=3 \
+            --user-agent="Mozilla/5.0" \
+            --no-check-certificate \
+            -O "$LOCAL_PATH" \
+            "$REMOTE_URL"
+            
+          if [ $? -eq 0 ] && [ -s "$LOCAL_PATH" ]; then
+            FILE_SIZE=$(wc -c < "$LOCAL_PATH")
+            echo "✅ wget下载成功"
+            echo "文件大小: $FILE_SIZE 字节"
+            echo "downloaded=true" >> $GITHUB_OUTPUT
+            echo "method=wget" >> $GITHUB_OUTPUT
+          else
+            echo "❌ wget失败"
+            rm -f "$LOCAL_PATH"
+          fi
+        fi
+        
+        # 方法3: 详细curl
+        if [ ! -f "$LOCAL_PATH" ] || [ ! -s "$LOCAL_PATH" ]; then
+          echo ""
+          echo "=== 方法3: 详细curl下载 ==="
+          curl -L \
+            -o "$LOCAL_PATH" \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+            -H "Accept: text/plain,*/*;q=0.9" \
+            -H "Accept-Language: zh-CN,zh;q=0.9" \
+            -H "Referer: https://my9.ltd/" \
+            --max-time 90 \
+            --retry 3 \
+            "$REMOTE_URL"
+            
+          if [ $? -eq 0 ] && [ -s "$LOCAL_PATH" ]; then
+            FILE_SIZE=$(wc -c < "$LOCAL_PATH")
+            echo "✅ 详细curl下载成功"
+            echo "文件大小: $FILE_SIZE 字节"
+            echo "downloaded=true" >> $GITHUB_OUTPUT
+            echo "method=detailed_curl" >> $GITHUB_OUTPUT
+          else
+            echo "❌ 所有下载方法都失败"
+            
+            if [ -f "tv/pllive.txt" ] && [ -s "tv/pllive.txt" ]; then
+              echo "⚠️ 使用现有文件"
+              echo "downloaded=true" >> $GITHUB_OUTPUT
+              echo "method=existing" >> $GITHUB_OUTPUT
+            else
+              echo "downloaded=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          fi
+        fi
+        
+        # 显示最终信息
+        if [ -f "$LOCAL_PATH" ] && [ -s "$LOCAL_PATH" ]; then
+          FINAL_SIZE=$(wc -c < "$LOCAL_PATH")
+          FINAL_LINES=$(wc -l < "$LOCAL_PATH")
+          
+          echo ""
+          echo "=== 下载完成 ==="
+          echo "文件大小: $FINAL_SIZE 字节"
+          echo "文件行数: $FINAL_LINES 行"
+        fi
+        
+    - name: Check if file changed
+      id: check-change
+      if: steps.download.outputs.downloaded == 'true'
+      run: |
+        echo "检查文件变化..."
+        
+        FILE_PATH="tv/pllive.txt"
+        
+        if [ ! -f "$FILE_PATH" ]; then
+          echo "❌ 文件不存在"
+          echo "has_change=false" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        
+        CURRENT_HASH=$(md5sum "$FILE_PATH" | cut -d' ' -f1)
+        echo "当前文件MD5: $CURRENT_HASH"
+        
+        if git ls-files "$FILE_PATH" >/dev/null 2>&1; then
+          GIT_HASH=$(git hash-object "$FILE_PATH")
+          echo "Git中文件哈希: $GIT_HASH"
+          
+          if [ "$CURRENT_HASH" = "$GIT_HASH" ]; then
+            echo "文件无变化"
+            echo "has_change=false" >> $GITHUB_OUTPUT
+          else
+            echo "检测到文件变化"
+            echo "has_change=true" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "文件未被Git跟踪，是新文件"
+          echo "has_change=true" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Commit and push changes
+      if: steps.check-change.outputs.has_change == 'true'
+      run: |
+        echo "准备提交文件..."
+        
+        FILE_PATH="tv/pllive.txt"
+        
+        if [ ! -f "$FILE_PATH" ]; then
+          echo "❌ 文件不存在，无法提交"
+          exit 1
+        fi
+        
+        FILE_SIZE=$(wc -c < "$FILE_PATH")
+        FILE_LINES=$(wc -l < "$FILE_PATH")
+        FILE_MD5=$(md5sum "$FILE_PATH" | cut -d' ' -f1)
+        METHOD="${{ steps.download.outputs.method }}"
+        
+        echo "文件大小: $FILE_SIZE 字节"
+        echo "文件行数: $FILE_LINES 行"
+        echo "文件MD5: $FILE_MD5"
+        echo "下载方法: $METHOD"
+        
+        git add "$FILE_PATH"
+        
+        # 使用单行提交信息
+        COMMIT_MSG="📺 更新直播源文件 - $(date '+%Y-%m-%d %H:%M UTC') | 大小: ${FILE_SIZE}字节 | 行数: ${FILE_LINES}行 | 方法: ${METHOD}"
+        
+        git commit -m "$COMMIT_MSG"
+        
+        echo "推送到GitHub..."
+        git push
+        
+        echo "✅ 提交并推送完成"
+        
+    - name: Show final status
+      run: |
+        echo "=========================================="
+        echo "          任务执行完成"
+        echo "=========================================="
+        
+        echo "执行时间: $(date)"
+        
+        if [ -f "tv/pllive.txt" ]; then
+          echo ""
+          echo "✅ 文件状态:"
+          ls -lh "tv/pllive.txt"
+          
+          echo ""
+          echo "📊 文件统计:"
+          echo "大小: $(wc -c < "tv/pllive.txt") 字节"
+          echo "行数: $(wc -l < "tv/pllive.txt") 行"
+          
+          echo ""
+          echo "📝 内容预览:"
+          head -5 "tv/pllive.txt"
+          
+          echo ""
+          echo "📁 目录结构:"
+          find tv -type f
+        else
+          echo ""
+          echo "❌ 错误: 文件未找到"
+        fi
+        
+        echo ""
+        echo "📂 仓库状态:"
+        git status --short
+        
+        echo ""
+        echo "⏰ 下次自动执行: 每天 UTC 22:00 (北京时间 06:00)"
