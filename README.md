@@ -35,5 +35,5 @@ https://raw.githubusercontent.com/jn950/live/main/tv/pllive.txt
 ![截图2](/img/live2.png)
 
 ## Star History
-(https://api.star-history.com/svg?repos=jn950/live&type=Date)
+[![GitHub Star History](https://img.shields.io/github/stars/jn950/live?style=social)](https://github.com/jn950/live/stargazers)
 [![Star History Chart](https://api.star-history.com/svg?repos=jn950/live&type=Date)](https://star-history.com/#jn950/live&Date)
