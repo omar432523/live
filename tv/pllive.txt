@@ -1,2 +1,46 @@
-# 直播源文件下载失败 - Sun Jan  4 03:19:10 UTC 2026
-# 请检查URL: https://my9.ltd/tv/pllive.txt
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>WAF 安全防护系统</title>
+    <link rel="stylesheet" href="https://jscache.miancp.com:2083/Template/skin/cc.css?t=1767518896_d53bd597a6d31bd2" type="text/css" />
+    <!-- 添加HTML级别的缓存控制 -->
+    <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="pragma" content="no-cache">
+    <meta http-equiv="expires" content="0">
+    <style>
+        .hidden-param {
+            font-size: 0px;
+            color: transparent;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>WAF 安全防护系统</h1>
+    <p>您的请求被拒绝，您当前上网IP已经列入黑名单，主机禁止部分海外机房IP访问</p>
+    <p>可将您的IP发予主机管理员申请解封</p>
+    
+    <div class="footer">
+        © CDN 安全防护系统 
+        CDN识别IP: <span id="cdn-ip">45.138.68.51</span> 
+        您的真实IP: <span id="client-ip">获取中...</span>
+        <span class="hidden-param">1767518896_d53bd597a6d31bd2</span>
+    </div>
+
+    <script>
+    var cacheBuster = "?t=1767518896_d53bd597a6d31bd2";
+    
+    // 获取客户端真实IP
+    fetch('https://ip.miancp.com/?format=json' + cacheBuster)
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('client-ip').textContent = data.ip;
+      })
+      .catch(error => {
+        console.error('获取IP地址失败：', error);
+        document.getElementById('client-ip').textContent = '获取失败';
+      });
+    </script>
+</body>
+</html>
