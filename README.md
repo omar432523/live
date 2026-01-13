@@ -12,7 +12,7 @@
 
 ## TVBox
 
-**导航**：https://sej95.github.io
+**导航**：https://iuaihub.github.io
 
 **体验地址**：
 https://raw.githubusercontent.com/jn950/live/main/tv/pllive.txt
